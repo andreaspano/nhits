@@ -35,14 +35,13 @@ print("device count:", torch.cuda.device_count())
 # =========================================================
 # PARAMETERS
 # =========================================================
-test = True
 tck = "UCG.MI"
+initial_capital = 100.0
 
 start_date = "2020-01-01"
 end_date = "2026-04-30"
 
 h = 1
-
 
 # =========================================================
 # DOWNLOAD DATA
@@ -96,24 +95,6 @@ config_nhits = {
     "scaler_type": tune.choice(["robust", "standard"]),
     "random_seed": tune.choice([42, 123, 2026]),
 }
-
-# Quick test config for fast runs
-config_test = {
-    "input_size": 5,
-    "max_steps": 2,
-    "learning_rate": 1e-2,
-    "batch_size": 2,
-    "windows_batch_size": 4,
-    "n_pool_kernel_size": [1, 1, 1],
-    "n_freq_downsample": [1, 1, 1],
-    "scaler_type": "standard",
-    "random_seed": 42,
-}
-
-
-# Use config_test for quick testing if test is True
-if test:
-    config_nhits = config_test
 
 # =========================================================
 # MODEL INSTANTIATION
