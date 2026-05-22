@@ -97,7 +97,7 @@ config_nhits = {
 
     "n_pool_kernel_size": tune.choice([[2, 2, 1], [3, 2, 1]]),
     "n_freq_downsample": tune.choice([[8, 4, 1], [4, 2, 1]]),
-.v
+
     "scaler_type": tune.choice(["robust", "standard"]),
     "random_seed": tune.choice([42, 123, 2026]),
 }
