@@ -36,8 +36,8 @@ print("device count:", torch.cuda.device_count())
 # PARAMETERS
 # =========================================================
 
-test = False
-tck_list = ["UCG.MI", "ISP.MI", "BAMI.MI", "BPE.MI", "BMPS.MI", "FBK.MI", "MB.MI", "G.MI", "AZM.MI", "UNI.MI"]
+test = True
+tck_list = ["UCG.MI", "ISP.MI"]
 start_date = "2020-01-01"
 end_date = "2026-04-30"
 h = 1
@@ -92,8 +92,8 @@ config_nhits = {
     "input_size": tune.choice([20, 40, 60, 80]),
     "max_steps": tune.choice([300, 500, 700]),
     "learning_rate": tune.choice([1e-3, 5e-4, 1e-4]),
-    "batch_size": tune.choice([64, 128, 256]),
-    "windows_batch_size": tune.choice([128, 256, 512]),
+    "batch_size": tune.choice([16, 32, 64, 128, 256, 512]),
+    "windows_batch_size": tune.choice([32, 64, 128, 256, 512]),
 
     "n_pool_kernel_size": tune.choice([[2, 2, 1], [3, 2, 1]]),
     "n_freq_downsample": tune.choice([[8, 4, 1], [4, 2, 1]]),
@@ -159,8 +159,6 @@ cv.to_csv("cv.csv", index=False)
 
 # Calculate MAPE using nixtla's implementation
 if "AutoNHITS" in cv.columns:
-    y_true = torch.tensor(np.array(cv["y"]), dtype=torch.float32)
-    y_pred = torch.tensor(np.array(cv["AutoNHITS"]), dtype=torch.float32)
-    mape_value = MAPE()(y_true, y_pred).item()
+    mape_value = MAPE()(np.array(cv["y"]), np.array(cv["AutoNHITS"]))
     print(f"MAPE: {mape_value:.2f}%")
 
