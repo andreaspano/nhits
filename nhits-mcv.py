@@ -9,7 +9,7 @@ import numpy as np
 
 from neuralforecast import NeuralForecast
 from neuralforecast.auto import AutoNHITS
-from neuralforecast.losses.pytorch import MAE
+from neuralforecast.losses.pytorch import MAE, MAPE
 from ray import tune
 
 
@@ -35,49 +35,54 @@ print("device count:", torch.cuda.device_count())
 # =========================================================
 # PARAMETERS
 # =========================================================
-test = True
-tck = "UCG.MI"
 
+test = False
+tck_list = ["UCG.MI", "ISP.MI", "BAMI.MI", "BPE.MI", "BMPS.MI", "FBK.MI", "MB.MI", "G.MI", "AZM.MI", "UNI.MI"]
 start_date = "2020-01-01"
 end_date = "2026-04-30"
-
 h = 1
 
 
+
 # =========================================================
-# DOWNLOAD DATA
+# DOWNLOAD DATA FOR MULTIPLE TICKERS
 # =========================================================
-df = (
-    yf.download(
-        tickers=tck,
-        start=start_date,
-        end=end_date,
-        interval="1d",
-        auto_adjust=True
+dfs = []
+for tck in tck_list:
+    df_tck = (
+        yf.download(
+            tickers=tck,
+            start=start_date,
+            end=end_date,
+            interval="1d",
+            auto_adjust=True
+        )
+        .reset_index()
     )
-    .reset_index()
-)
+    # Flatten yfinance columns
+    df_tck.columns = df_tck.columns.get_level_values(0)
+    df_tck.columns.name = None
+    df_tck = (
+        df_tck[["Date", "Open", "High", "Low", "Close", "Volume"]]
+        .dropna()
+        .drop_duplicates(subset=["Date"])
+        .sort_values("Date")
+        .reset_index(drop=True)
+    )
+    df_tck["unique_id"] = tck
+    dfs.append(df_tck)
 
-# Flatten yfinance columns
-df.columns = df.columns.get_level_values(0)
-df.columns.name = None
+# Concatenate all tickers
+df = pd.concat(dfs, ignore_index=True)
 
-df = (
-    df[["Date", "Open", "High", "Low", "Close", "Volume"]]
-    .dropna()
-    .drop_duplicates(subset=["Date"])
-    .sort_values("Date")
-    .reset_index(drop=True)
-)
 
 # =========================================================
 # PREPARE DATA FOR NIXTLA / MLFORECAST
 # =========================================================
 ts = df.copy()
-ts["unique_id"] = tck
 ts["ds"] = ts['Date']
 ts["y"] = ts["Close"]
-ts["Volume"] = ts["Volume"].shift(1)  # Use previous day's volume as a feature
+ts["Volume"] = ts.groupby("unique_id")['Volume'].shift(1)  # Use previous day's volume as a feature per ticker
 ts = ts[["unique_id", "ds", "y"]]
 
 # =========================================================
@@ -87,7 +92,7 @@ config_nhits = {
     "input_size": tune.choice([20, 40, 60, 80]),
     "max_steps": tune.choice([300, 500, 700]),
     "learning_rate": tune.choice([1e-3, 5e-4, 1e-4]),
-    "batch_size": tune.choice([16, 32, 64]),
+    "batch_size": tune.choice([64, 128, 256]),
     "windows_batch_size": tune.choice([128, 256, 512]),
 
     "n_pool_kernel_size": tune.choice([[2, 2, 1], [3, 2, 1]]),
@@ -151,4 +156,11 @@ cv = nf.cross_validation(
 elapsed = (time.time() - start)/60
 print(f"Elapsed time: {elapsed:.2f} minutes")
 cv.to_csv("cv.csv", index=False)
+
+# Calculate MAPE using nixtla's implementation
+if "AutoNHITS" in cv.columns:
+    y_true = torch.tensor(np.array(cv["y"]), dtype=torch.float32)
+    y_pred = torch.tensor(np.array(cv["AutoNHITS"]), dtype=torch.float32)
+    mape_value = MAPE()(y_true, y_pred).item()
+    print(f"MAPE: {mape_value:.2f}%")
 
