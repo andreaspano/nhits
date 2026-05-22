@@ -36,8 +36,8 @@ print("device count:", torch.cuda.device_count())
 # PARAMETERS
 # =========================================================
 
-test = True
-tck_list = ["UCG.MI", "ISP.MI"]
+test = False
+tck_list = ["UCG.MI", "ISP.MI", "BAMI.MI", "BPE.MI", "BMPS.MI", "FBK.MI", "MB.MI", "G.MI", "AZM.MI", "UNI.MI"]
 start_date = "2020-01-01"
 end_date = "2026-04-30"
 h = 1
@@ -97,7 +97,7 @@ config_nhits = {
 
     "n_pool_kernel_size": tune.choice([[2, 2, 1], [3, 2, 1]]),
     "n_freq_downsample": tune.choice([[8, 4, 1], [4, 2, 1]]),
-
+.v
     "scaler_type": tune.choice(["robust", "standard"]),
     "random_seed": tune.choice([42, 123, 2026]),
 }
