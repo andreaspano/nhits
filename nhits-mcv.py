@@ -10,11 +10,17 @@ import numpy as np
 from neuralforecast import NeuralForecast
 from neuralforecast.auto import AutoNHITS
 from neuralforecast.losses.pytorch import MAE, MAPE
+from neuralforecast.losses.numpy  import  mape
+
 from ray import tune
 
+from datetime import datetime
+from pathlib import Path
 
-#from plotnine import (ggplot,aes,geom_line,geom_point,labs,geom_abline,theme_minimal)
 import time
+
+
+
 
 # =========================================================
 # SETTINGS
@@ -35,14 +41,19 @@ print("device count:", torch.cuda.device_count())
 # =========================================================
 # PARAMETERS
 # =========================================================
-
 test = False
 tck_list = ["UCG.MI", "ISP.MI", "BAMI.MI", "BPE.MI", "BMPS.MI", "FBK.MI", "MB.MI", "G.MI", "AZM.MI", "UNI.MI"]
 start_date = "2020-01-01"
 end_date = "2026-04-30"
 h = 1
-
-
+# =========================================================
+# OUTPUT SETTINGS
+# =========================================================
+out_dir = Path("./out")
+out_dir.mkdir(parents=True, exist_ok=True)
+tag = datetime.now().strftime('%Y_%m_%d_%H_%M')
+file_cv = out_dir /  f"df_cv_{tag}.csv"
+file_mape = out_dir /  f"df_mape_{tag}.csv"
 
 # =========================================================
 # DOWNLOAD DATA FOR MULTIPLE TICKERS
@@ -84,7 +95,6 @@ ts["ds"] = ts['Date']
 ts["y"] = ts["Close"]
 ts["Volume"] = ts.groupby("unique_id")['Volume'].shift(1)  # Use previous day's volume as a feature per ticker
 ts = ts[["unique_id", "ds", "y"]]
-
 # =========================================================
 # MODEL CONFIG
 # =========================================================
@@ -146,7 +156,7 @@ nf = NeuralForecast(
 # CROSS VALIDATION
 # =========================================================
 start = time.time()
-cv = nf.cross_validation(
+df_cv = nf.cross_validation(
     df=ts,
     h=h,
     n_windows=12,
@@ -154,11 +164,50 @@ cv = nf.cross_validation(
     refit=True
 )
 elapsed = (time.time() - start)/60
+
+
+
+
 print(f"Elapsed time: {elapsed:.2f} minutes")
-cv.to_csv("cv.csv", index=False)
 
-# Calculate MAPE using nixtla's implementation
-if "AutoNHITS" in cv.columns:
-    mape_value = MAPE()(np.array(cv["y"]), np.array(cv["AutoNHITS"]))
-    print(f"MAPE: {mape_value:.2f}%")
+# Save cross-validation results to csv
+df_cv.to_csv(file_cv, index=False)
 
+
+
+# read cv results back from csv (optional, can be skipped if df_cv is still in memory)
+#df_cv = pd.read_csv(file_cv)
+
+# prepare cv results
+df_cv = (
+    df_cv
+    .assign(
+        ds=pd.to_datetime(df_cv.ds),
+        id=df_cv.unique_id,
+        yhat=df_cv.AutoNHITS
+    )
+    .filter(items=["ds", "id", "y", "yhat"])
+)
+
+# Global MAPE
+global_mape = mape(df_cv["y"].values, df_cv["yhat"].values)
+
+# MAPE by id
+df_mape = (
+    df_cv
+    .groupby("id")[["y", "yhat"]]
+    .apply(
+        lambda x: mape(
+            x["y"].values,
+            x["yhat"].values
+        )
+    )
+    .reset_index(name="MAPE")
+)
+
+
+df_mape.loc[len(df_mape)] = ["GLOBAL", global_mape]
+
+
+# save mape results to csv
+df_mape.to_csv(file_mape, index=False)
